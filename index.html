@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>이그전 트래커 · 코스피·코스닥 이격도 & MDD</title>
+<meta name="description" content="이은택의 그림전략(이그전) 이론 기반 코스피·코스닥 지표 트래커 모음. 50일 이격도 과열/과열해소, MDD 고점 대비 최대 낙폭을 매 거래일 자동 갱신." />
+<meta name="author" content="CHO투자노트" />
+<meta name="keywords" content="이그전, 이은택 그림전략, 코스피 이격도, 코스피 MDD, 코스닥 지표, 과열 트래커, 고점 대비 낙폭" />
+<link rel="canonical" href="https://andy-0401.github.io/" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="이그전 트래커" />
+<meta property="og:locale" content="ko_KR" />
+<meta property="og:url" content="https://andy-0401.github.io/" />
+<meta property="og:title" content="이그전 트래커 · 코스피·코스닥 이격도 & MDD" />
+<meta property="og:description" content="이그전 이론 기반 코스피·코스닥 지표 트래커 — 50일 이격도 · MDD 실시간 트래킹." />
+<meta property="og:image" content="https://andy-0401.github.io/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://andy-0401.github.io/og.png" />
+<style>
+  :root{
+    --bg:#0b0f17; --card:#131a26; --card2:#0f1521; --line:#222c3d;
+    --txt:#e7edf6; --muted:#8b97aa; --accent:#3b82f6;
+    --kospi:#60a5fa; --mdd:#f97316;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",Segoe UI,Roboto,sans-serif;
+    background:radial-gradient(1200px 600px at 50% -10%, #16203099, transparent), var(--bg);
+    color:var(--txt); min-height:100vh; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:56px 20px 40px}
+  header{text-align:center;margin-bottom:12px}
+  .logo{font-size:44px;line-height:1}
+  h1{font-size:30px;font-weight:900;letter-spacing:-1px;margin:14px 0 8px}
+  .sub{font-size:15px;color:var(--muted);line-height:1.6;max-width:520px;margin:0 auto}
+  .cards{display:grid;gap:16px;margin:36px 0 28px}
+  @media(min-width:620px){.cards{grid-template-columns:1fr 1fr}}
+  a.card{
+    display:block;text-decoration:none;color:inherit;
+    background:linear-gradient(180deg,var(--card),var(--card2));
+    border:1px solid var(--line);border-radius:18px;padding:24px 22px;
+    box-shadow:0 6px 24px #00000033;transition:transform .15s,border-color .15s,box-shadow .15s;
+  }
+  a.card:hover{transform:translateY(-3px);border-color:#31405a;box-shadow:0 12px 34px #00000055}
+  .badge{display:inline-block;font-size:12px;font-weight:800;padding:4px 11px;border-radius:999px;margin-bottom:14px}
+  .b-kospi{background:#3b82f61f;color:var(--kospi);border:1px solid #3b82f644}
+  .b-mdd{background:#f973161f;color:var(--mdd);border:1px solid #f9731644}
+  .card h2{font-size:21px;font-weight:800;letter-spacing:-.5px;margin-bottom:8px}
+  .card p{font-size:13.5px;color:var(--muted);line-height:1.6}
+  .card .go{margin-top:16px;font-size:13px;font-weight:800;color:var(--txt)}
+  .card .go::after{content:" →"}
+  .note{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:16px 18px;font-size:13px;color:var(--muted);line-height:1.65}
+  .note b{color:var(--txt)}
+  footer{margin-top:30px;text-align:center;font-size:12px;color:var(--muted);line-height:1.7}
+  footer a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">📊</div>
+    <h1>이그전 트래커</h1>
+    <p class="sub">이은택의 그림전략(이그전) 이론 기반 코스피·코스닥 지표 트래커.<br />매 거래일 장중·종가 자동 갱신.</p>
+  </header>
+
+  <nav class="cards">
+    <a class="card" href="https://andy-0401.github.io/kospi-ma-disparity/">
+      <span class="badge b-kospi">50일 이격도</span>
+      <h2>코스피 50일 이격도</h2>
+      <p>현재가 ÷ 50일 이동평균 × 100. 과열(≥130%)·과열해소(≤105%) 구간을 실시간으로 추적합니다.</p>
+      <div class="go">이격도 보기</div>
+    </a>
+    <a class="card" href="https://andy-0401.github.io/kr-mdd/">
+      <span class="badge b-mdd">MDD</span>
+      <h2>코스피·코스닥 MDD</h2>
+      <p>고점 대비 최대 낙폭(MDD). 지금의 하락이 강세장 정상 조정인지 판단합니다. 이격도와 함께 활용.</p>
+      <div class="go">MDD 보기</div>
+    </a>
+  </nav>
+
+  <div class="note">
+    <b>이그전 이격도·MDD 함께 보기:</b> 50일 이격도가 과열 해소(≤105%)되고 MDD도 조정 구간으로 깊어졌다면 강세장 정상 조정의 분할매수 후보 구간입니다. 두 지표를 교차로 확인하세요.
+  </div>
+
+  <footer>
+    <p>© CHO투자노트 · <a href="https://blog.naver.com/egzion" target="_blank" rel="noopener">이그전(이은택의 그림전략)</a> 이론 기반</p>
+    <p>본 사이트는 정보 제공용이며 투자 권유가 아닙니다. 투자 판단의 책임은 본인에게 있습니다.</p>
+  </footer>
+</div>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "name": "이그전 트래커",
+      "url": "https://andy-0401.github.io/",
+      "inLanguage": "ko-KR",
+      "description": "이그전(이은택의 그림전략) 이론 기반 코스피·코스닥 이격도·MDD 지표 트래커 모음."
+    },
+    {
+      "@type": "ItemList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "코스피 50일 이격도", "url": "https://andy-0401.github.io/kospi-ma-disparity/" },
+        { "@type": "ListItem", "position": 2, "name": "코스피·코스닥 MDD", "url": "https://andy-0401.github.io/kr-mdd/" }
+      ]
+    }
+  ]
+}
+</script>
+</body>
+</html>
