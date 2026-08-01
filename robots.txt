@@ -1,4 +1,29 @@
+# 모든 크롤러 허용 (검색엔진 + AI)
 User-agent: *
+Allow: /
+
+# AI 크롤러 명시 허용 — ChatGPT·Claude·Gemini·Perplexity 등 AI 답변에 인용되도록
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-Web
+Allow: /
+User-agent: anthropic-ai
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Perplexity-User
+Allow: /
+User-agent: Google-Extended
+Allow: /
+User-agent: Applebot-Extended
+Allow: /
+User-agent: CCBot
 Allow: /
 
 Sitemap: https://andy-0401.github.io/sitemap.xml
