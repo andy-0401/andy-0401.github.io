@@ -11,14 +11,15 @@
 **최초 1회 5분**이면 되고, 이후엔 모든 채팅에서 링크만 붙여넣으면 끝. 폰 브라우저만으로 가능합니다.
 
 1. 아래 버튼 누르기 → GitHub 계정으로 Vercel 로그인
-   → `ACCESS_KEY` 칸에 아무 비밀번호(예: `sky7291`) 입력 → **Deploy**
+   → **Deploy** (다른 입력 없음)
 
-   [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fandy-0401%2Fandy-0401.github.io%2Ftree%2Fmain%2Ftools%2Furl-reader%2Fvercel&project-name=url-reader&repository-name=url-reader&env=ACCESS_KEY&envDescription=%EC%BB%A4%EB%84%A5%ED%84%B0%20%EC%A3%BC%EC%86%8C%EC%97%90%20%EB%B6%99%EC%9D%BC%20%EB%B9%84%EB%B0%80%EB%B2%88%ED%98%B8%20(%EB%82%A8%EC%9D%B4%20%EB%82%B4%20%EC%84%9C%EB%B2%84%EB%A5%BC%20%EB%AA%BB%20%EC%93%B0%EA%B2%8C))
+   [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fandy-0401%2Fandy-0401.github.io%2Ftree%2Fmain%2Ftools%2Furl-reader%2Fvercel&project-name=url-reader&repository-name=url-reader))
 
 2. 배포가 끝나면 나오는 주소(예: `https://url-reader-abc.vercel.app`)를 복사
 3. 폰 브라우저에서 **claude.ai → 설정 → 커넥터 → 커스텀 커넥터 추가**
    - 이름: `URL 리더`
-   - URL: `https://url-reader-abc.vercel.app/mcp?key=sky7291` (2번 주소 + `/mcp?key=` + 1번 비밀번호)
+   - URL: `https://url-reader-abc.vercel.app/mcp` (2번 주소 + `/mcp`)
+   - (선택) 남이 못 쓰게 하려면 Vercel 프로젝트 설정에 환경변수 `ACCESS_KEY` 를 넣고 URL 끝에 `?key=그값` 을 붙이세요
 4. 끝. 채팅에서 `이거 읽어줘 https://m.humoruniv.com/...` 처럼 링크만 주면 됩니다.
    (처음 한 번 도구 사용 허락을 물으면 "항상 허용")
 
