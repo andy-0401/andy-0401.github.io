@@ -8,21 +8,21 @@ const UA =
 const VOID = new Set("area base br col embed hr img input link meta param source track wbr".split(" "));
 const BLOCK = new Set("p div br li ul ol tr td table section article blockquote pre h1 h2 h3 h4 h5 h6 dd dt".split(" "));
 const SKIP = new Set("nav header footer aside form button select iframe svg".split(" "));
-const MAX_IMAGES = 6;
-const MAX_IMAGE_BYTES = 3_000_000;
 
 const TOOL = {
   name: "read_url",
   description:
-    "웹페이지 URL의 본문 텍스트와 본문 이미지를 가져온다. 네이버 블로그, 유머대학(humoruniv), " +
+    "웹페이지 URL의 본문 텍스트와 본문 이미지(실제 이미지로 첨부 — 이미지 속 글자·표·그래프를 직접 읽을 것)를 가져온다. 네이버 블로그, 유머대학(humoruniv), " +
     "티스토리, 커뮤니티 게시글, 뉴스 등 일반 웹 가져오기로 안 읽히는 페이지도 읽는다. " +
     "사용자가 링크를 주면 캡처·PDF를 요구하지 말고 이 도구를 먼저 호출해라.",
   inputSchema: {
     type: "object",
     properties: {
       url: { type: "string", description: "읽을 페이지 주소" },
-      include_images: { type: "boolean", description: "본문 이미지를 함께 가져올지 (기본 true, 최대 6장)" },
-      full_page: { type: "boolean", description: "본문 추출 대신 페이지 전체 텍스트(댓글 포함)를 받을지" },
+      include_images: { type: "boolean", description: "본문 이미지를 함께 가져와 직접 볼지 (기본 true). 이미지 속 글자·표·차트도 읽을 수 있다" },
+      image_start: { type: "integer", description: "이미지가 많아 잘렸을 때 이어서 볼 이미지 번호(0부터)" },
+      full_page: { type: "boolean", description: "본문 추출 대신 페이지 전체 텍스트를 받을지 (댓글 전체가 필요할 때)" },
+      raw: { type: "boolean", description: "디버그용: 원본 HTML 그대로" },
       max_chars: { type: "integer", description: "텍스트 최대 글자 수 (기본 40000)" },
     },
     required: ["url"],
@@ -151,7 +151,24 @@ function imgSrc(n) {
   return a["data-lazy-src"] || a["data-original"] || a["data-src"] || a.src || "";
 }
 
-// 텍스트/이미지가 가장 많이 몰린 블록을 본문으로 본다 (링크 텍스트는 제외)
+// 아이콘·프로필·로딩 이미지 같은 UI 잡동사니 거르기
+const JUNK_IMG = /(^|[\/_.-])(ic|icon|icons|btn|button|bg|logo|emoti\w*|sticker|loading\w*|spinner|avatar|profile|sprite|blank|spacer|arrow|thumb)([\/_.-]|$)|icon-|ic_|cmt_|sendmemo|thumb\.php|\.svg(\?|$)/i;
+function isContentImg(n) {
+  const src = imgSrc(n);
+  if (!src || src.startsWith("data:") || JUNK_IMG.test(src)) return false;
+  const w = parseInt(n.attrs.width, 10), h = parseInt(n.attrs.height, 10);
+  if ((w && w < 80) || (h && h < 80)) return false;
+  return !inside(n, isComment);
+}
+
+const COMMENT_RE = /comment|cmt|reply|replies|댓글/i;
+const isComment = (n) => n.tag && COMMENT_RE.test(`${n.attrs.id || ""} ${n.attrs.class || ""}`);
+function inside(n, pred) {
+  for (let p = n.parent; p; p = p.parent) if (pred(p)) return true;
+  return false;
+}
+
+// 텍스트/이미지가 가장 많이 몰린 블록을 본문으로 본다 (링크·댓글 영역 텍스트는 제외)
 function bestBlock(root) {
   const score = new Map();
   const add = (n, v) => {
@@ -164,14 +181,9 @@ function bestBlock(root) {
   };
   for (const n of walk(root)) {
     if (n.text !== undefined) {
-      let inLink = false, skipped = false;
-      for (let p = n.parent; p; p = p.parent) {
-        if (p.tag === "a") inLink = true;
-        if (SKIP.has(p.tag)) skipped = true;
-      }
-      if (!inLink && !skipped) add(n, n.text.trim().length);
-    } else if (n.tag === "img" && /^(https?:|\/)/.test(imgSrc(n))) {
-      add(n, 80);
+      if (!inside(n, (p) => p.tag === "a" || SKIP.has(p.tag) || isComment(p))) add(n, n.text.trim().length);
+    } else if (n.tag === "img" && isContentImg(n)) {
+      add(n, 300);
     }
   }
   let best = null, bestScore = 0;
@@ -188,9 +200,16 @@ function pickContent(root, fullPage) {
   return bestBlock(root);
 }
 
+// 댓글 영역: 댓글 class/id를 가진 가장 바깥 요소들
+function commentBlocks(root) {
+  return [...walk(root)].filter((n) => isComment(n) && !inside(n, isComment));
+}
+
 // ---------- 마크다운으로 ----------
 
-function toMarkdown(node, base) {
+const UI_LINES = new Set("추천 반대 답글 이동 신고 추천완료 추천되었습니다. ...전체보기 스크랩 - 공유 좋아요 댓글 URL 복사".split(" "));
+
+function toMarkdown(node, base, { withImages = true } = {}) {
   const out = [];
   const images = [];
   const rec = (n) => {
@@ -200,12 +219,14 @@ function toMarkdown(node, base) {
     if (BLOCK.has(t)) out.push("\n");
     if (/^h[1-4]$/.test(t)) out.push("#".repeat(+t[1]) + " ");
     if (t === "li") out.push("- ");
-    if (t === "img" || t === "video") {
-      let src = t === "video" ? n.attrs.poster || n.attrs.src : imgSrc(n);
+    if (withImages && (t === "img" || t === "video")) {
+      let src = t === "video" ? n.attrs.poster : isContentImg(n) ? imgSrc(n) : "";
       if (src && !src.startsWith("data:")) {
         src = new URL(src.replace("type=w80_blur", "type=w966"), base).href;
-        images.push(src);
-        out.push(`\n[이미지 ${images.length}](${src})\n`);
+        if (!images.includes(src)) {
+          images.push(src);
+          out.push(`\n[이미지 ${images.length}]\n`);
+        }
       }
     }
     const href = t === "a" && n.attrs.href && !n.attrs.href.startsWith("javascript") ? n.attrs.href : null;
@@ -220,49 +241,109 @@ function toMarkdown(node, base) {
   rec(node);
   const text = out.join("")
     .replace(/[​﻿]/g, "").replace(/ /g, " ")
-    .split("\n").map((l) => l.replace(/[ \t]+/g, " ").trim()).join("\n")
+    .split("\n").map((l) => l.replace(/[ \t]+/g, " ").trim()).filter((l) => !UI_LINES.has(l)).join("\n")
     .replace(/\n{3,}/g, "\n\n").trim();
   return { text, images };
 }
 
-async function fetchImage(src, referer) {
+// ---------- 이미지: 내려받아 Claude가 글자를 읽을 수 있는 크기로 자르기 ----------
+
+let sharp = null;
+try { sharp = require("sharp"); } catch { /* sharp 없으면 원본 그대로 */ }
+
+const TILE_W = 1000;          // 가로 최대 폭
+const TILE_H = 1400;          // 세로로 긴 이미지(캡처·짤)는 이 높이씩 잘라서 보냄
+const IMAGE_BUDGET = 3_300_000; // base64 합계 (Vercel 응답 한도 4.5MB 안쪽)
+
+async function fetchImageTiles(src, referer) {
   try {
     const r = await fetch(src, {
-      headers: { "User-Agent": UA, Referer: referer, Accept: "image/*" },
-      signal: AbortSignal.timeout(8000),
+      headers: { "User-Agent": UA, Referer: referer, Accept: "image/avif,image/webp,image/*,*/*" },
+      signal: AbortSignal.timeout(10000),
     });
-    const type = (r.headers.get("content-type") || "").split(";")[0];
-    if (!r.ok || !/^image\/(png|jpeg|gif|webp)$/.test(type)) return null;
+    const type = (r.headers.get("content-type") || "").split(";")[0].trim();
+    if (!r.ok || !type.startsWith("image/")) return [];
     const buf = Buffer.from(await r.arrayBuffer());
-    if (buf.length > MAX_IMAGE_BYTES) return null;
-    return { type: "image", data: buf.toString("base64"), mimeType: type };
+    if (!sharp) {
+      if (!/^image\/(png|jpeg|gif|webp)$/.test(type) || buf.length > 3_000_000) return [];
+      return [{ data: buf.toString("base64"), mimeType: type }];
+    }
+    const meta = await sharp(buf, { animated: false }).metadata();
+    const w0 = meta.width, h0 = meta.pageHeight || meta.height;
+    if (!w0 || !h0 || (w0 < 80 && h0 < 80)) return [];   // 아이콘 크기
+    const W = Math.min(TILE_W, w0);
+    const H = Math.round(h0 * (W / w0));
+    const base = await sharp(buf, { animated: false })
+      .flatten({ background: "#ffffff" })
+      .resize({ width: W })
+      .toBuffer();
+    const tiles = [];
+    for (let y = 0; y < H; y += TILE_H) {
+      const out = await sharp(base)
+        .extract({ left: 0, top: y, width: W, height: Math.min(TILE_H, H - y) })
+        .jpeg({ quality: 78 })
+        .toBuffer();
+      tiles.push({ data: out.toString("base64"), mimeType: "image/jpeg" });
+    }
+    return tiles;
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function readUrl({ url, include_images = true, full_page = false, max_chars = 40000 }) {
+async function readUrl({ url, include_images = true, full_page = false, max_chars = 40000, image_start = 0, raw = false }) {
   if (!/^https?:\/\//i.test(url)) throw new Error("http(s) 주소만 읽을 수 있습니다");
   const errors = [];
   for (const cand of naverCandidates(url) || [url]) {
     let page;
     try { page = await fetchHtml(cand); } catch (e) { errors.push(`${cand}: ${e.message}`); continue; }
+    if (raw) return [{ type: "text", text: page.html.slice(0, max_chars) }];
     const { root, meta } = parse(page.html);
     const titleNode = [...walk(root)].find((n) => n.tag === "title");
     const title = (meta["og:title"] || (titleNode ? textOf(titleNode) : "")).trim();
-    let { text, images } = toMarkdown(pickContent(root, full_page), page.finalUrl);
+    const body = pickContent(root, full_page);
+    let { text, images } = toMarkdown(body, page.finalUrl);
+
+    // 본문 블록에 이미지가 없으면(이미지 글인데 텍스트 블록만 잡힌 경우) 페이지 전체에서 본문 이미지를 찾음
+    if (!images.length) {
+      for (const n of walk(root)) {
+        if (n.tag === "img" && isContentImg(n)) {
+          const src = new URL(imgSrc(n).replace("type=w80_blur", "type=w966"), page.finalUrl).href;
+          if (!images.includes(src)) images.push(src);
+        }
+      }
+      if (images.length) text = images.map((_, i) => `[이미지 ${i + 1}]`).join("\n") + (text ? "\n\n" + text : "");
+    }
+
+    // 댓글은 본문과 따로 붙임
+    if (!full_page) {
+      const cmt = commentBlocks(root).filter((n) => !inside(body, (p) => p === n) && n !== body)
+        .map((n) => toMarkdown(n, page.finalUrl, { withImages: false }).text).filter(Boolean).join("\n\n");
+      if (cmt) text += `\n\n---\n## 댓글\n${cmt.slice(0, 8000)}${cmt.length > 8000 ? "\n…(댓글 더 있음: full_page=true)" : ""}`;
+    }
+
     if (!text && !images.length) { errors.push(`${cand}: 본문을 찾지 못함`); continue; }
     if (text.length > max_chars) text = text.slice(0, max_chars) + `\n\n…(이하 생략, 총 ${text.length}자)`;
     const content = [{ type: "text", text: `# ${title}\n출처: ${url}\n\n${text}` }];
+
     if (include_images && images.length) {
-      const got = (await Promise.all(images.slice(0, MAX_IMAGES).map((s) => fetchImage(s, page.finalUrl)))).filter(Boolean);
-      let total = 0;
-      for (const img of got) {
-        total += img.data.length;
-        if (total > 3_500_000) break;   // Vercel 응답 한도(4.5MB) 안쪽
-        content.push(img);
+      const list = images.slice(image_start);
+      const tilesPer = await Promise.all(list.slice(0, 20).map((s) => fetchImageTiles(s, page.finalUrl)));
+      let used = 0, shown = 0;
+      for (let i = 0; i < tilesPer.length; i++) {
+        const tiles = tilesPer[i];
+        const size = tiles.reduce((a, t) => a + t.data.length, 0);
+        if (shown && used + size > IMAGE_BUDGET) break;
+        const no = image_start + i + 1;
+        content.push({ type: "text", text: tiles.length ? `[이미지 ${no}]${tiles.length > 1 ? ` (세로로 긴 이미지라 ${tiles.length}조각으로 나눔, 위→아래 순서)` : ""}` : `[이미지 ${no}] 가져오기 실패: ${list[i]}` });
+        for (const t of tiles) content.push({ type: "image", data: t.data, mimeType: t.mimeType });
+        used += size;
+        shown++;
       }
-      if (images.length > MAX_IMAGES) content.push({ type: "text", text: `(이미지 ${images.length}장 중 ${MAX_IMAGES}장만 첨부)` });
+      const next = image_start + shown;
+      if (next < images.length) {
+        content.push({ type: "text", text: `(이미지 ${images.length}장 중 ${image_start + 1}~${next}번까지 첨부. 나머지는 image_start=${next} 로 다시 호출)` });
+      }
     }
     return content;
   }

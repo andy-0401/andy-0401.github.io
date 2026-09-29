@@ -1,5 +1,6 @@
 {
   "name": "url-reader-mcp",
   "private": true,
-  "engines": { "node": ">=18" }
+  "engines": { "node": ">=18" },
+  "dependencies": { "sharp": "^0.34.0" }
 }
