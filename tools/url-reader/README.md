@@ -1,9 +1,31 @@
-# url-reader: URL만 주면 Claude가 글을 읽게 하는 도구
+# url-reader: 링크만 주면 Claude가 글을 읽게 하는 도구
 
 네이버 블로그는 본문이 iframe 안에 있고, Claude의 기본 웹 가져오기(WebFetch)는
 `blog.naver.com` / `m.blog.naver.com` 를 **아예 읽지 못합니다**. 그래서 그동안 캡처나 PDF를 줘야 했던 것.
 이 도구는 **내 컴퓨터에서** 네이버 PostView 주소로 바로 요청해 본문만 마크다운으로 뽑습니다.
 (파이썬 3.8+ 표준 라이브러리만 사용, 설치할 패키지 없음)
+
+## 📱 폰 Claude 앱에서 링크만 주면 읽게 하기 (추천)
+
+폰의 Claude 앱은 인터넷에 떠 있는 "커넥터"만 쓸 수 있어서, 무료 서버(Vercel)에 리더를 한 번 올려두고 커넥터로 등록합니다.
+**최초 1회 5분**이면 되고, 이후엔 모든 채팅에서 링크만 붙여넣으면 끝. 폰 브라우저만으로 가능합니다.
+
+1. 아래 버튼 누르기 → GitHub 계정으로 Vercel 로그인
+   → `ACCESS_KEY` 칸에 아무 비밀번호(예: `sky7291`) 입력 → **Deploy**
+
+   [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fandy-0401%2Fandy-0401.github.io%2Ftree%2Fmain%2Ftools%2Furl-reader%2Fvercel&project-name=url-reader&repository-name=url-reader&env=ACCESS_KEY&envDescription=%EC%BB%A4%EB%84%A5%ED%84%B0%20%EC%A3%BC%EC%86%8C%EC%97%90%20%EB%B6%99%EC%9D%BC%20%EB%B9%84%EB%B0%80%EB%B2%88%ED%98%B8%20(%EB%82%A8%EC%9D%B4%20%EB%82%B4%20%EC%84%9C%EB%B2%84%EB%A5%BC%20%EB%AA%BB%20%EC%93%B0%EA%B2%8C))
+
+2. 배포가 끝나면 나오는 주소(예: `https://url-reader-abc.vercel.app`)를 복사
+3. 폰 브라우저에서 **claude.ai → 설정 → 커넥터 → 커스텀 커넥터 추가**
+   - 이름: `URL 리더`
+   - URL: `https://url-reader-abc.vercel.app/mcp?key=sky7291` (2번 주소 + `/mcp?key=` + 1번 비밀번호)
+4. 끝. 채팅에서 `이거 읽어줘 https://m.humoruniv.com/...` 처럼 링크만 주면 됩니다.
+   (처음 한 번 도구 사용 허락을 물으면 "항상 허용")
+
+본문 텍스트 + 본문 이미지(최대 6장)를 Claude가 직접 봅니다. EUC-KR 인코딩 사이트(웃대 등)도 읽힙니다.
+댓글까지 보고 싶으면 "댓글까지 전체로 읽어줘"라고 하면 `full_page` 로 읽습니다.
+
+## 그 밖의 사용처
 
 | 어디서 쓰나 | 방법 | 설정 |
 |---|---|---|
