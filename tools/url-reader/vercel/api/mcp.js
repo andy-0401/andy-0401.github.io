@@ -22,7 +22,7 @@ const TOOL = {
       include_images: { type: "boolean", description: "본문 이미지를 함께 가져와 직접 볼지 (기본 true). 이미지 속 글자·표·차트도 읽을 수 있다" },
       image_start: { type: "integer", description: "이미지가 많아 잘렸을 때 이어서 볼 이미지 번호(0부터)" },
       full_page: { type: "boolean", description: "본문 추출 대신 페이지 전체 텍스트를 받을지 (댓글 전체가 필요할 때)" },
-      raw: { type: "boolean", description: "디버그용: 원본 HTML 그대로" },
+      raw: { type: "boolean", description: "디버그용: script/style 뺀 원본 HTML (image_start 를 글자 오프셋으로 사용)" },
       max_chars: { type: "integer", description: "텍스트 최대 글자 수 (기본 40000)" },
     },
     required: ["url"],
@@ -143,6 +143,9 @@ const MATCHERS = [
   (n) => n.attrs?.id === "postViewArea",     // 네이버 구 에디터
   (n) => hasClass(n, "se_component_wrap"),   // 네이버 SmartEditor 3
   (n) => hasClass(n, "tt_article_useless_p_margin") || hasClass(n, "article_view"), // 티스토리
+  // 커뮤니티/게시판에서 흔한 본문 컨테이너 id·class
+  (n) => /^(wrap_copy|body_editor|read_body|view_content|board_content|post_content|post-content|article_body|article-body|entry-content|post-body|content_body|xe_content|view_body|rd_body|bbs_content|writing_content)$/i
+    .test(n.attrs?.id || "") || (n.attrs?.class || "").split(/\s+/).some((c) => /^(body_editor|read_body|view_content|board_content|post_content|post-content|article_body|article-body|entry-content|post-body|xe_content|rd_body|writing_content)$/i.test(c)),
   (n) => n.tag === "article",
 ];
 
@@ -153,16 +156,27 @@ function imgSrc(n) {
 
 // 아이콘·프로필·로딩 이미지 같은 UI 잡동사니 거르기
 const JUNK_IMG = /(^|[\/_.-])(ic|icon|icons|btn|button|bg|logo|emoti\w*|sticker|loading\w*|spinner|avatar|profile|sprite|blank|spacer|arrow|thumb)([\/_.-]|$)|icon-|ic_|cmt_|sendmemo|thumb\.php|\.svg(\?|$)/i;
-function isContentImg(n) {
+function isContentImg(n, body) {
   const src = imgSrc(n);
   if (!src || src.startsWith("data:") || JUNK_IMG.test(src)) return false;
   const w = parseInt(n.attrs.width, 10), h = parseInt(n.attrs.height, 10);
   if ((w && w < 80) || (h && h < 80)) return false;
-  return !inside(n, isComment);
+  return !inCommentArea(n, body);
+}
+
+// 댓글 영역 안인가? (본문으로 고른 블록 안쪽의 "comment_*" 이름은 무시 — 웃대 등은 본문 이미지도 comment_img_div)
+function inCommentArea(n, body) {
+  for (let p = n.parent; p && p !== body; p = p.parent) if (isComment(p)) return true;
+  return false;
 }
 
 const COMMENT_RE = /comment|cmt|reply|replies|댓글/i;
-const isComment = (n) => n.tag && COMMENT_RE.test(`${n.attrs.id || ""} ${n.attrs.class || ""}`);
+const COMMENT_UI_RE = /comment_(img|file|crop|thumb|byte)|cmt_(up|re|move|singo)/i;  // 댓글 이름이지만 본문에도 쓰이는 조각
+const isComment = (n) => {
+  if (!n.tag) return false;
+  const name = `${n.attrs.id || ""} ${n.attrs.class || ""}`;
+  return COMMENT_RE.test(name) && !COMMENT_UI_RE.test(name);
+};
 function inside(n, pred) {
   for (let p = n.parent; p; p = p.parent) if (pred(p)) return true;
   return false;
@@ -181,7 +195,7 @@ function bestBlock(root) {
   };
   for (const n of walk(root)) {
     if (n.text !== undefined) {
-      if (!inside(n, (p) => p.tag === "a" || SKIP.has(p.tag) || isComment(p))) add(n, n.text.trim().length);
+      if (!inside(n, (p) => p.tag === "a" || SKIP.has(p.tag)) && !inCommentArea(n, null)) add(n, n.text.trim().length);
     } else if (n.tag === "img" && isContentImg(n)) {
       add(n, 300);
     }
@@ -201,8 +215,9 @@ function pickContent(root, fullPage) {
 }
 
 // 댓글 영역: 댓글 class/id를 가진 가장 바깥 요소들
-function commentBlocks(root) {
-  return [...walk(root)].filter((n) => isComment(n) && !inside(n, isComment));
+function commentBlocks(root, body) {
+  const contains = (a, b) => { for (let p = b; p; p = p.parent) if (p === a) return true; return false; };
+  return [...walk(root)].filter((n) => isComment(n) && !inside(n, isComment) && !contains(body, n) && !contains(n, body));
 }
 
 // ---------- 마크다운으로 ----------
@@ -210,6 +225,7 @@ function commentBlocks(root) {
 const UI_LINES = new Set("추천 반대 답글 이동 신고 추천완료 추천되었습니다. ...전체보기 스크랩 - 공유 좋아요 댓글 URL 복사".split(" "));
 
 function toMarkdown(node, base, { withImages = true } = {}) {
+  const body = node;
   const out = [];
   const images = [];
   const rec = (n) => {
@@ -220,7 +236,7 @@ function toMarkdown(node, base, { withImages = true } = {}) {
     if (/^h[1-4]$/.test(t)) out.push("#".repeat(+t[1]) + " ");
     if (t === "li") out.push("- ");
     if (withImages && (t === "img" || t === "video")) {
-      let src = t === "video" ? n.attrs.poster : isContentImg(n) ? imgSrc(n) : "";
+      let src = t === "video" ? n.attrs.poster : isContentImg(n, body) ? imgSrc(n) : "";
       if (src && !src.startsWith("data:")) {
         src = new URL(src.replace("type=w80_blur", "type=w966"), base).href;
         if (!images.includes(src)) {
@@ -297,7 +313,10 @@ async function readUrl({ url, include_images = true, full_page = false, max_char
   for (const cand of naverCandidates(url) || [url]) {
     let page;
     try { page = await fetchHtml(cand); } catch (e) { errors.push(`${cand}: ${e.message}`); continue; }
-    if (raw) return [{ type: "text", text: page.html.slice(0, max_chars) }];
+    if (raw) {
+      const stripped = page.html.replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, "").replace(/\n\s*\n+/g, "\n");
+      return [{ type: "text", text: stripped.slice(image_start, image_start + max_chars) }];
+    }
     const { root, meta } = parse(page.html);
     const titleNode = [...walk(root)].find((n) => n.tag === "title");
     const title = (meta["og:title"] || (titleNode ? textOf(titleNode) : "")).trim();
@@ -307,17 +326,18 @@ async function readUrl({ url, include_images = true, full_page = false, max_char
     // 본문 블록에 이미지가 없으면(이미지 글인데 텍스트 블록만 잡힌 경우) 페이지 전체에서 본문 이미지를 찾음
     if (!images.length) {
       for (const n of walk(root)) {
-        if (n.tag === "img" && isContentImg(n)) {
+        if (n.tag === "img" && isContentImg(n, null)) {
           const src = new URL(imgSrc(n).replace("type=w80_blur", "type=w966"), page.finalUrl).href;
           if (!images.includes(src)) images.push(src);
         }
       }
+      if (!images.length && meta["og:image"] && !JUNK_IMG.test(meta["og:image"])) images.push(new URL(meta["og:image"], page.finalUrl).href);
       if (images.length) text = images.map((_, i) => `[이미지 ${i + 1}]`).join("\n") + (text ? "\n\n" + text : "");
     }
 
     // 댓글은 본문과 따로 붙임
     if (!full_page) {
-      const cmt = commentBlocks(root).filter((n) => !inside(body, (p) => p === n) && n !== body)
+      const cmt = commentBlocks(root, body)
         .map((n) => toMarkdown(n, page.finalUrl, { withImages: false }).text).filter(Boolean).join("\n\n");
       if (cmt) text += `\n\n---\n## 댓글\n${cmt.slice(0, 8000)}${cmt.length > 8000 ? "\n…(댓글 더 있음: full_page=true)" : ""}`;
     }
