@@ -1,0 +1,5 @@
+{
+  "name": "url-reader-mcp",
+  "private": true,
+  "engines": { "node": ">=18" }
+}
